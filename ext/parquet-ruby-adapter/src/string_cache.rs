@@ -44,7 +44,12 @@ impl StringCache {
                 // Create Ruby string and intern it
                 let rstring = RString::new(&s);
                 let interned = rstring.to_interned_str();
-                let static_str = interned.as_str().map_err(|e| e.to_string())?;
+                // SAFETY: `to_interned_str` returns a frozen, VM-interned string that
+                // Ruby guarantees will not be garbage collected. The resulting &str is
+                // therefore valid for the lifetime of the process ('static).
+                let static_str: &'static str = unsafe {
+                    std::mem::transmute(interned.as_str().map_err(|e| e.to_string())?)
+                };
 
                 cache.insert(s.clone(), static_str);
 
