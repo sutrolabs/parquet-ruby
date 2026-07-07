@@ -1,5 +1,8 @@
 # Changelog
 
+## 0.7.4
+- Add `Parquet.repack` for streaming Parquet files with matching schemas into `batch-{n}.parquet` output files
+
 ## 0.7.3
 - Read both arrow metadata and parquet metadata in case only one of the two has relevant information for parsing
 
