@@ -170,6 +170,22 @@ Parquet.write_rows(rows,
 )
 ```
 
+### Repacking Existing Parquet Files
+
+Concatenating and/or splitting Parquet files while preserving the input schema.
+
+```ruby
+
+Parquet.repack(
+  ["input-0.parquet", "input-1.parquet"],
+  output_dir: "repacked",
+  rows_per_file: 100_000,
+  max_read_rows_per_chunk: 8192,
+  compression: "zstd"
+)
+# writes repacked/batch-0.parquet, repacked/batch-1.parquet, ...
+```
+
 ### Column-wise Writing
 
 Best for: Pre-columnar data, better compression, higher performance

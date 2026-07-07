@@ -6,7 +6,7 @@ use magnus::{
 use parquet::basic::Compression;
 use parquet_core::ParquetValue;
 
-use crate::types::{ColumnEnumeratorArgs, ParquetWriteArgs, RowEnumeratorArgs};
+use crate::types::{ColumnEnumeratorArgs, ParquetRepackArgs, ParquetWriteArgs, RowEnumeratorArgs};
 
 /// Estimate the memory size of a ParquetValue
 pub fn estimate_parquet_value_size(value: &ParquetValue) -> usize {
@@ -122,6 +122,90 @@ pub fn parse_parquet_write_args(
         logger: kwargs.optional.4.flatten(),
         string_cache: kwargs.optional.5.flatten(),
     })
+}
+
+pub fn parse_parquet_repack_args(
+    ruby: &Ruby,
+    args: &[Value],
+) -> Result<ParquetRepackArgs, MagnusError> {
+    let parsed_args = scan_args::<(Value,), (), (), (), _, ()>(args)?;
+    let (read_from,) = parsed_args.required;
+
+    let kwargs = get_kwargs::<
+        _,
+        (String, usize),
+        (
+            Option<Option<usize>>,
+            Option<Option<String>>,
+        ),
+        (),
+    >(
+        parsed_args.keywords,
+        &["output_dir", "rows_per_file"],
+        &["max_read_rows_per_chunk", "compression"],
+    )?;
+
+    let read_from = parse_path_list(ruby, read_from, "read_from")?;
+    let output_dir = kwargs.required.0;
+    let rows_per_file = kwargs.required.1;
+    let max_read_rows_per_chunk = kwargs.optional.0.flatten();
+
+    if read_from.is_empty() {
+        return Err(MagnusError::new(
+            magnus::exception::arg_error(),
+            "read_from must include at least one path",
+        ));
+    }
+
+    if rows_per_file == 0 {
+        return Err(MagnusError::new(
+            magnus::exception::arg_error(),
+            "rows_per_file must be greater than 0",
+        ));
+    }
+
+    if max_read_rows_per_chunk == Some(0) {
+        return Err(MagnusError::new(
+            magnus::exception::arg_error(),
+            "max_read_rows_per_chunk must be greater than 0",
+        ));
+    }
+
+    Ok(ParquetRepackArgs {
+        read_from,
+        output_dir,
+        rows_per_file,
+        max_read_rows_per_chunk,
+        compression: kwargs.optional.1.flatten(),
+    })
+}
+
+fn parse_path_list(ruby: &Ruby, value: Value, name: &str) -> Result<Vec<String>, MagnusError> {
+    if value.is_kind_of(ruby.class_string()) {
+        return Ok(vec![value.to_r_string()?.to_string()?]);
+    }
+
+    if value.is_kind_of(ruby.class_array()) {
+        let array: RArray = magnus::TryConvert::try_convert(value)?;
+        let mut paths = Vec::with_capacity(array.len());
+
+        for item in array.into_iter() {
+            if !item.is_kind_of(ruby.class_string()) {
+                return Err(MagnusError::new(
+                    magnus::exception::type_error(),
+                    format!("{} must contain only String paths", name),
+                ));
+            }
+            paths.push(item.to_r_string()?.to_string()?);
+        }
+
+        return Ok(paths);
+    }
+
+    Err(MagnusError::new(
+        magnus::exception::type_error(),
+        format!("{} must be a String path or an Array of String paths", name),
+    ))
 }
 
 /// Convert a Ruby Value to a String, handling both String and Symbol types

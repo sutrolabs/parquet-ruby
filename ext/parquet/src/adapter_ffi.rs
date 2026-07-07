@@ -160,3 +160,14 @@ pub fn write_columns(args: &[Value]) -> Result<Value, MagnusError> {
     // Delegate to parquet_ruby_adapter
     parquet_ruby_adapter::writer::write_columns(&ruby, write_args)
 }
+
+pub fn repack(args: &[Value]) -> Result<Value, MagnusError> {
+    let ruby = Ruby::get().map_err(|_| {
+        MagnusError::new(
+            magnus::exception::runtime_error(),
+            "Failed to get Ruby runtime",
+        )
+    })?;
+
+    parquet_ruby_adapter::repack::repack(&ruby, args)
+}

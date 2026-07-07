@@ -133,4 +133,22 @@ module Parquet
   end
   def self.write_columns(read_from, schema:, write_to:, flush_threshold: nil, compression: nil)
   end
+
+  # Options:
+  #   - `read_from`: String path or array of paths to Parquet files with matching schemas
+  #   - `output_dir`: Directory where batch-{n}.parquet files will be written
+  #   - `rows_per_file`: Maximum number of rows per output file
+  #   - `max_read_rows_per_chunk`: Optional maximum number of rows to read per chunk
+  #   - `compression`: Optional compression type to use
+  sig do
+    params(
+      read_from: T.any(String, T::Array[String]),
+      output_dir: String,
+      rows_per_file: Integer,
+      max_read_rows_per_chunk: T.nilable(Integer),
+      compression: T.nilable(String)
+    ).returns(T::Array[T::Hash[String, T.any(String, Integer)]])
+  end
+  def self.repack(read_from, output_dir:, rows_per_file:, max_read_rows_per_chunk: nil, compression: nil)
+  end
 end
