@@ -183,12 +183,15 @@ fn repack_files(
         completed_outputs.push(close_output(output)?);
     }
 
+    if completed_outputs.is_empty() {
+        completed_outputs.push(close_output(create_output(args, schema, 0, compression)?)?);
+    }
+
     persist_outputs(completed_outputs)
 }
 
 fn persist_outputs(outputs: Vec<CompletedOutput>) -> Result<Vec<RepackedFile>, String> {
     let mut repacked_files = Vec::with_capacity(outputs.len());
-    let mut persisted_paths = Vec::with_capacity(outputs.len());
 
     for output in outputs {
         let CompletedOutput {
@@ -200,16 +203,12 @@ fn persist_outputs(outputs: Vec<CompletedOutput>) -> Result<Vec<RepackedFile>, S
 
         match temp_path.persist(&final_path) {
             Ok(_) => {
-                persisted_paths.push(final_path);
                 repacked_files.push(RepackedFile {
                     path: final_path_string,
                     num_rows,
                 });
             }
             Err(error) => {
-                for persisted_path in persisted_paths {
-                    let _ = fs::remove_file(persisted_path);
-                }
                 return Err(format!(
                     "Failed to move temporary file to '{}': {}",
                     final_path_string, error.error
