@@ -12,10 +12,13 @@ use parquet::arrow::arrow_reader::ParquetRecordBatchReaderBuilder;
 use parquet::arrow::ArrowWriter;
 use parquet::basic::Compression;
 use parquet::file::properties::WriterProperties;
+use parquet_core::max_batch_size_for_column_count;
 use tempfile::{NamedTempFile, TempPath};
 
 use crate::types::ParquetRepackArgs;
 use crate::utils::{parse_compression, parse_parquet_repack_args};
+
+const DEFAULT_MAX_READ_ROWS_PER_CHUNK: usize = 8192;
 
 struct RepackedFile {
     path: String,
@@ -135,6 +138,8 @@ fn repack_files(
 ) -> Result<Vec<RepackedFile>, String> {
     let schema = read_schema(&args.read_from[0])?;
     validate_input_schemas(args, schema.clone())?;
+    let max_read_rows_per_chunk =
+        effective_max_read_rows_per_chunk(args.max_read_rows_per_chunk, schema.fields().len());
 
     let mut completed_outputs = Vec::new();
     let mut output_index = 0usize;
@@ -143,7 +148,7 @@ fn repack_files(
 
     for input_path in &args.read_from {
         let reader = create_reader_builder(input_path)?
-            .with_batch_size(args.max_read_rows_per_chunk)
+            .with_batch_size(max_read_rows_per_chunk)
             .build()
             .map_err(|e| e.to_string())?;
 
@@ -202,6 +207,12 @@ fn repack_files(
     }
 
     persist_outputs(completed_outputs)
+}
+
+fn effective_max_read_rows_per_chunk(requested: Option<usize>, column_count: usize) -> usize {
+    requested
+        .unwrap_or(DEFAULT_MAX_READ_ROWS_PER_CHUNK)
+        .min(max_batch_size_for_column_count(column_count))
 }
 
 fn check_cancelled(cancelled: &AtomicBool) -> Result<(), String> {
@@ -334,4 +345,34 @@ fn create_reader_builder(path: &str) -> Result<ParquetRecordBatchReaderBuilder<F
         File::open(path).map_err(|e| format!("Failed to open input file '{}': {}", path, e))?;
 
     ParquetRecordBatchReaderBuilder::try_new(file).map_err(|e| e.to_string())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn effective_max_read_rows_per_chunk_uses_default_when_unset() {
+        assert_eq!(
+            effective_max_read_rows_per_chunk(None, 1),
+            DEFAULT_MAX_READ_ROWS_PER_CHUNK
+        );
+    }
+
+    #[test]
+    fn effective_max_read_rows_per_chunk_is_bounded_by_schema_width() {
+        assert_eq!(
+            effective_max_read_rows_per_chunk(Some(1_000_000), 2),
+            max_batch_size_for_column_count(2)
+        );
+        assert_eq!(
+            effective_max_read_rows_per_chunk(None, 2_000),
+            max_batch_size_for_column_count(2_000)
+        );
+    }
+
+    #[test]
+    fn effective_max_read_rows_per_chunk_preserves_smaller_requests() {
+        assert_eq!(effective_max_read_rows_per_chunk(Some(64), 2_000), 64);
+    }
 }

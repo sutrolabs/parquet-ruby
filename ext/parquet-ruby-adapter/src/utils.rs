@@ -168,8 +168,7 @@ pub fn parse_parquet_repack_args(
         "max_read_rows_per_chunk",
         kwargs.optional.2.flatten(),
         MAX_BATCH_SIZE,
-    )?
-    .unwrap_or(8192);
+    )?;
 
     let output_file_prefix = kwargs
         .optional
