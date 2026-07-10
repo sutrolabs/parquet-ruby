@@ -3,6 +3,7 @@ use std::os::raw::c_void;
 use std::panic::{catch_unwind, AssertUnwindSafe};
 use std::path::PathBuf;
 use std::ptr;
+use std::sync::atomic::{AtomicBool, Ordering};
 
 use arrow_schema::SchemaRef;
 use magnus::value::ReprValue;
@@ -40,6 +41,7 @@ struct RepackWithoutGvlState {
     args: Option<ParquetRepackArgs>,
     compression: Compression,
     result: Option<std::thread::Result<Result<Vec<RepackedFile>, String>>>,
+    cancelled: *const AtomicBool,
 }
 
 pub fn repack(ruby: &Ruby, args: &[Value]) -> Result<Value, MagnusError> {
@@ -63,10 +65,12 @@ fn repack_without_gvl(
     args: ParquetRepackArgs,
     compression: Compression,
 ) -> Result<Vec<RepackedFile>, MagnusError> {
+    let cancelled = AtomicBool::new(false);
     let mut state = RepackWithoutGvlState {
         args: Some(args),
         compression,
         result: None,
+        cancelled: &cancelled,
     };
 
     magnus::rb_sys::protect(|| {
@@ -74,8 +78,10 @@ fn repack_without_gvl(
             rb_sys::rb_thread_call_without_gvl(
                 Some(repack_without_gvl_trampoline),
                 (&mut state as *mut RepackWithoutGvlState).cast::<c_void>(),
-                None,
-                ptr::null_mut(),
+                Some(repack_without_gvl_unblock),
+                (&cancelled as *const AtomicBool)
+                    .cast_mut()
+                    .cast::<c_void>(),
             );
         }
         rb_sys::Qnil as rb_sys::VALUE
@@ -100,10 +106,16 @@ unsafe extern "C" fn repack_without_gvl_trampoline(data: *mut c_void) -> *mut c_
     state.result = Some(catch_unwind(AssertUnwindSafe(|| {
         let args = state.args.take().expect("repack arguments must be present");
         let compression = state.compression;
-        repack_files(&args, compression)
+        let cancelled = unsafe { &*state.cancelled };
+        repack_files(&args, compression, cancelled)
     })));
 
     ptr::null_mut()
+}
+
+unsafe extern "C" fn repack_without_gvl_unblock(data: *mut c_void) {
+    let cancelled = unsafe { &*data.cast::<AtomicBool>() };
+    cancelled.store(true, Ordering::SeqCst);
 }
 
 fn panic_message(payload: Box<dyn std::any::Any + Send>) -> String {
@@ -119,6 +131,7 @@ fn panic_message(payload: Box<dyn std::any::Any + Send>) -> String {
 fn repack_files(
     args: &ParquetRepackArgs,
     compression: Compression,
+    cancelled: &AtomicBool,
 ) -> Result<Vec<RepackedFile>, String> {
     let schema = read_schema(&args.read_from[0])?;
     validate_input_schemas(args, schema.clone())?;
@@ -163,6 +176,7 @@ fn repack_files(
                     .writer
                     .write(&batch_slice)
                     .map_err(|e| e.to_string())?;
+                check_cancelled(cancelled)?;
                 output.num_rows += rows_to_write;
 
                 offset += rows_to_write;
@@ -188,6 +202,14 @@ fn repack_files(
     }
 
     persist_outputs(completed_outputs)
+}
+
+fn check_cancelled(cancelled: &AtomicBool) -> Result<(), String> {
+    if cancelled.load(Ordering::SeqCst) {
+        Err("Parquet.repack interrupted".to_string())
+    } else {
+        Ok(())
+    }
 }
 
 fn persist_outputs(outputs: Vec<CompletedOutput>) -> Result<Vec<RepackedFile>, String> {
