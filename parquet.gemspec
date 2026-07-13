@@ -1,15 +1,14 @@
 require_relative "lib/parquet/version"
 
 Gem::Specification.new do |spec|
-  spec.name = "parquet"
+  spec.name = "sutrolabs-parquet"
   spec.version = Parquet::VERSION
   spec.authors = ["Nathan Jaremko"]
   spec.email = ["nathan@jaremko.ca"]
 
   spec.summary = "Parquet library for Ruby, written in Rust"
   spec.description = <<-EOF
-    Parquet is a high-performance Parquet library for Ruby, written in Rust.
-    It wraps the official Apache Rust implementation to provide fast, correct Parquet parsing.
+    FORK OF njaremko/parquet-ruby FOR DEVELOPMENT
   EOF
   spec.homepage = "https://github.com/njaremko/parquet-ruby"
   spec.license = "MIT"

@@ -88,4 +88,4 @@ jobs:
           RUBYOPT: "${{ format('-r{0}/rubygems-attestation-patch.rb {1}', github.workspace, env.RUBYOPT) || env.RUBYOPT }}"
         run: |
           gem build parquet.gemspec
-          gem push --key rubygems parquet-*.gem
+          gem push --key rubygems sutrolabs-parquet-*.gem

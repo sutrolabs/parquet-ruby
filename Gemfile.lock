@@ -1,7 +1,7 @@
 PATH
   remote: .
   specs:
-    parquet (0.8.0)
+    sutrolabs-parquet (0.8.0)
       bigdecimal
       rb_sys (~> 0.9.39)
 
@@ -32,7 +32,7 @@ DEPENDENCIES
   csv
   logger
   minitest (~> 5.0)
-  parquet!
+  sutrolabs-parquet!
   rake
   rake-compiler (~> 1.2.0)
   rb_sys (~> 0.9.56)
