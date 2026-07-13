@@ -1,7 +1,7 @@
 PATH
   remote: .
   specs:
-    sutrolabs-parquet (0.8.0)
+    sutrolabs-parquet (0.8.1)
       bigdecimal
       rb_sys (~> 0.9.39)
 
@@ -23,8 +23,14 @@ GEM
       rake-compiler-dock (= 1.9.1)
 
 PLATFORMS
+  aarch64-linux
+  aarch64-linux-musl
+  arm64-darwin
   arm64-darwin-23
   ruby
+  x86_64-darwin
+  x86_64-linux
+  x86_64-linux-musl
 
 DEPENDENCIES
   benchmark-memory
@@ -32,10 +38,10 @@ DEPENDENCIES
   csv
   logger
   minitest (~> 5.0)
-  sutrolabs-parquet!
   rake
   rake-compiler (~> 1.2.0)
   rb_sys (~> 0.9.56)
+  sutrolabs-parquet!
 
 BUNDLED WITH
-   2.6.6
+   2.6.9
